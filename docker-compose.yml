@@ -1,0 +1,27 @@
+services:
+  endfield-sync:
+    image: rolingg/endfield-gacha-core:latest
+    container_name: endfield-sync
+    restart: unless-stopped
+    # 以宿主机当前用户身份运行，挂载目录天然可写，无需 chown。
+    # 这里写死 1000:1000 而不是引用 ${UID}:${GID} —— 因为 environment 里
+    # 的业务变量 UID（游戏账号）会遮蔽同名的 shell 变量，导致取到错误的值。
+    # 若你的 uid 不是 1000，请用 `id -u` / `id -g` 查出后改成实际数字。
+    user: "1000:1000"
+    volumes:
+      # 配置文件（含短 token）。请先复制 config.example.yaml 为 config.yaml 并填写
+      - ./config.yaml:/app/config.yaml:ro
+      # 数据落盘目录：容器重建后数据仍在
+      - ./data:/app/data
+    environment:
+      # 把 token 写在配置文件里时可删掉 SHORT_TOKEN 这行；
+      # 想用 .env 注入则保留，并在同目录创建 .env 写入 SHORT_TOKEN=xxx
+      # 环境变量优先级高于配置文件
+      - TZ=Asia/Shanghai
+      - SHORT_TOKEN=${SHORT_TOKEN:-}
+      # 游戏账号 uid，通常不用填：留空时服务端会自动识别对应角色
+      - UID=${GAME_UID:-}
+    # 启用 HTTP 接口时取消下面的端口映射，并在 config.yaml 中设置
+    # http_addr: "0.0.0.0:8080" 与 access_key: "你的随机密钥"
+    # ports:
+    #   - "8080:8080"

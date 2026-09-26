@@ -1,0 +1,20 @@
+# 编译产物
+*.exe
+/bin/
+
+# 本地运行数据与配置（含凭证，勿提交）
+/data/
+/userdata/
+config.yaml
+.env
+
+# 内部设计与开发记录，不随仓库发布
+/docs
+
+# 日志
+*.log
+
+# 编辑器
+.idea/
+.vscode/
+.DS_Store

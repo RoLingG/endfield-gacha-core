@@ -1,0 +1,25 @@
+# endfield-gacha-core 配置文件
+#
+# 复制本文件为 config.yaml，填入 short_token 即可启动。
+# 环境变量优先级高于本文件，可用 SHORT_TOKEN / UID / DATA_DIR 等覆盖。
+
+# ===== 凭证 =====
+short_token: "<在此填入短 token>"   # 必填。官网登录后从浏览器 Local Storage 获取
+# uid: "948995284"                 # 选填。留空时自动识别账号绑定角色，通常无需填写
+server_id: "1"                     # 服务器区服，官方服通常为 1
+# server_type: "official"          # 选填。留空时自动判定 official / bilibili
+
+# ===== 同步设置 =====
+sync_interval: "6h"                # 同步间隔，支持 30m / 6h / 24h，建议 6h~12h
+sync_timeout: "5m"                 # 单次同步超时，网络环境较慢时可调整至 10m
+data_dir: "./data"                 # 数据目录，容器内应保持 /app/data
+
+# ===== 可选 =====
+lang: "zh-cn"                      # 接口语言
+log_level: "info"                  # debug / info / warn / error
+
+# ===== HTTP 接口（可选，留空则不启用）=====
+# http_addr 与 access_key 需同时填写才会启用；access_key 应使用足够随机的字符串
+http_addr: ""                      # 例如 "0.0.0.0:8080"
+access_key: ""                     # 建议使用 openssl rand -hex 24 生成
+min_trigger: "60s"                 # 手动触发的最小间隔，用于限制调用频率

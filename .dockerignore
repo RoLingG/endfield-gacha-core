@@ -1,0 +1,30 @@
+# 构建上下文排除项
+#
+# 注意：.gitignore 不影响 docker build，构建上下文默认为整个目录。
+# 下列内容对编译无用，排除后可减小上下文体积、加快构建，
+# 并避免凭证进入构建层缓存。
+
+# 凭证与运行数据（含短 token，绝不能进镜像层）
+config.yaml
+.env
+/data/
+/userdata/
+
+# 内部文档与开发记录（构建不需要任何 Markdown）
+docs/
+*.md
+
+# 版本控制与编辑器
+.git/
+.gitignore
+.idea/
+.vscode/
+
+# 编译产物与日志
+/server
+/bin/
+*.exe
+*.log
+
+# 其他
+.DS_Store
