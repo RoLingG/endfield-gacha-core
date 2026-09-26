@@ -4,9 +4,6 @@
 Docker（可通过 `docker --version` 验证）。
 
 > token 获取方式、配置项说明、HTTP 接口用法见 [README.md](README.md)。
->
-> **在 Windows 上使用 Docker Desktop 测试**：请先阅读
-> [附录 C](#附录-cwindows--docker-desktop-注意事项)，Git Bash 的路径转换会导致挂载静默失败。
 
 ## 目录
 
@@ -315,68 +312,3 @@ sudo systemctl enable --now endfield-sync
 sudo journalctl -u endfield-sync -f
 ```
 
-## 附录 C：Windows / Docker Desktop 注意事项
-
-在 Windows 上使用 Docker Desktop 验证部署流程时，**Git Bash（MSYS2）会自动转换路径**，
-导致挂载参数失效。
-
-### 问题现象
-
-按标准命令挂载后，程序报「未找到配置文件」：
-
-```bash
-# Git Bash 中执行
-docker run -v "$(pwd)/config.yaml:/app/config.yaml:ro" ...
-#   → 提示：未找到配置文件 config.yaml，将仅使用环境变量启动
-```
-
-原因是 `$(pwd)` 展开为 `/d/GoLand/endfield-gacha-core`（MSYS 路径格式），
-Docker Desktop 无法识别该路径，**挂载静默失败**——不报错，只是容器内没有这个文件。
-
-### 解决办法
-
-**方式一：禁用路径转换**（推荐，命令可直接复制到 Linux）
-
-```bash
-MSYS_NO_PATHCONV=1 docker run -d --name endfield-sync --restart unless-stopped \
-  -v "D:\path\to\endfield-sync\config.yaml:/app/config.yaml:ro" \
-  -v "D:\path\to\endfield-sync\data:/app/data" \
-  -e TZ=Asia/Shanghai \
-  rolingg/endfield-gacha-core:latest
-```
-
-注意挂载源改为 **Windows 绝对路径**（反斜杠）。
-
-**方式二：使用 PowerShell**
-
-PowerShell 不做路径转换，`${PWD}` 可直接使用：
-
-```powershell
-docker run -d --name endfield-sync --restart unless-stopped `
-  -v "${PWD}\config.yaml:/app/config.yaml:ro" `
-  -v "${PWD}\data:/app/data" `
-  -e TZ=Asia/Shanghai `
-  rolingg/endfield-gacha-core:latest
-```
-
-**方式三：在 WSL2 中执行**
-
-WSL 的路径行为与 Linux 一致，把项目放在 WSL 文件系统中执行即可。
-
-### 验证挂载是否生效
-
-挂载失败不会报错，务必主动确认。用一个临时容器检查文件是否存在：
-
-```bash
-# Windows（Git Bash）
-MSYS_NO_PATHCONV=1 docker run --rm --entrypoint sh \
-  -v "D:\path\to\config.yaml:/app/config.yaml:ro" \
-  rolingg/endfield-gacha-core:latest -c "ls -la /app/config.yaml"
-```
-
-能看到文件即挂载成功；报 `No such file or directory` 说明挂载参数有问题。
-
-### 关于 `--user`
-
-文档中的 `--user "$(id -u):$(id -g)"` 是给 Linux 使用的。Windows 上 `id -u`
-返回的不是 Linux uid，该参数无意义，本机测试时**请去掉**。
