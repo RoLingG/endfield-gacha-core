@@ -1,6 +1,11 @@
 # ===== 构建阶段 =====
 FROM golang:1.24-alpine AS builder
 
+# 国内网络下 proxy.golang.org 不可达，改用国内代理。
+# 通过构建参数传入，海外构建时可覆盖：--build-arg GOPROXY=https://proxy.golang.org,direct
+ARG GOPROXY=https://goproxy.cn,direct
+ENV GOPROXY=${GOPROXY}
+
 WORKDIR /src
 
 # 先拷贝依赖清单并下载，利用层缓存：仅改业务代码时无需重下依赖
@@ -18,6 +23,11 @@ RUN CGO_ENABLED=0 GOOS=linux go build \
 
 # ===== 运行阶段 =====
 FROM alpine:latest
+
+# Alpine 官方源在国内访问缓慢，替换为清华镜像源。
+# 同样可通过 --build-arg APK_MIRROR=... 覆盖为其他源或官方源
+ARG APK_MIRROR=mirrors.tuna.tsinghua.edu.cn
+RUN sed -i "s|dl-cdn.alpinelinux.org|${APK_MIRROR}|g" /etc/apk/repositories
 
 # ca-certificates：请求官方 HTTPS 接口必需，缺失会报证书错误
 # tzdata：日志时间戳按本地时区显示
