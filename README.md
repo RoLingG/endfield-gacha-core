@@ -173,3 +173,7 @@ endfield-gacha-core/
 ```
 
 依赖仅 `zap`、`lumberjack`、`yaml.v3`，Go 版本要求 1.24。
+
+## 许可证
+
+[MIT](LICENSE)
