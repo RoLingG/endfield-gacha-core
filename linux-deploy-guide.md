@@ -1,7 +1,6 @@
 # Linux 部署指南
 
-本文档说明如何在 Linux 服务器上以 Docker 方式部署本服务。以下步骤假设目标主机已安装
-Docker（可通过 `docker --version` 验证）。
+本文档说明如何在 Linux 服务器上以 Docker 方式部署本服务。以下步骤假设目标主机已安装 Docker（可通过 `docker --version` 验证）。
 
 > token 获取方式、配置项说明、HTTP 接口用法见 [README.md](README.md)。
 
@@ -17,7 +16,9 @@ Docker（可通过 `docker --version` 验证）。
 - [附录 A：权限问题](#附录-a权限问题)
 - [附录 B：不使用 Docker 的部署方式](#附录-b不使用-docker-的部署方式)
 
-以下命令统一使用 `/opt/endfield-sync` 作为部署目录，可按需替换。
+第一至七章（Docker 方式）统一使用 `/opt/endfield-sync` 作为部署目录，用于存放配置文件与数据，可按需替换为其他路径。
+
+> 该目录与源码目录无关，只是容器挂载数据的落点，无需在其中放置代码。不使用 Docker 的部署方式见[附录 B](#附录-b不使用-docker-的部署方式)。
 
 ## 一、准备配置文件
 
@@ -243,8 +244,7 @@ access_key: "<随机密钥>"              # 必填，缺失时服务拒绝启动
 openssl rand -hex 24
 ```
 
-需重建容器以映射端口。此处将端口绑定到 `127.0.0.1` 而非 `0.0.0.0`，
-使接口仅本机可访问：
+需重建容器以映射端口。此处将端口绑定到 `127.0.0.1` 而非 `0.0.0.0`，使接口仅本机可访问：
 
 ```bash
 sudo docker rm -f endfield-sync
@@ -261,9 +261,12 @@ sudo docker run -d --name endfield-sync --restart unless-stopped \
 
 ```bash
 KEY="<access_key>"
-curl -X POST -H "Authorization: Bearer $KEY" http://127.0.0.1:8080/api/sync   # 手动触发同步
-curl      -H "Authorization: Bearer $KEY" http://127.0.0.1:8080/api/sync/status # 查询同步状态
-curl                                         http://127.0.0.1:8080/healthz     # 健康检查
+# 手动触发同步
+curl -X POST -H "Authorization: Bearer $KEY" http://127.0.0.1:8080/api/sync
+# 查询同步状态
+curl -H "Authorization: Bearer $KEY" http://127.0.0.1:8080/api/sync/status
+# 健康检查
+curl http://127.0.0.1:8080/healthz     
 ```
 
 需要从外部主机访问时，建议使用 SSH 隧道，避免直接暴露端口：
@@ -303,8 +306,7 @@ date
 sudo docker logs --tail 50 endfield-sync
 ```
 
-若日志出现 `短 token 已失效`，说明 token 已过期。重新获取后更新配置，
-执行 `sudo docker restart endfield-sync` 即可恢复。
+若日志出现 `短 token 已失效`，说明 token 已过期。重新获取后更新配置，执行 `sudo docker restart endfield-sync` 即可恢复。
 
 ### 日志时间戳时区不正确
 
@@ -312,8 +314,7 @@ sudo docker logs --tail 50 endfield-sync
 
 ### 挂载的配置文件未被读取
 
-现象：日志提示 `未找到配置文件 config.yaml，将仅使用环境变量启动`，
-但 `docker run` 中已通过 `-v` 指定了配置文件。
+现象：日志提示 `未找到配置文件 config.yaml，将仅使用环境变量启动`，但 `docker run` 中已通过 `-v` 指定了配置文件。
 
 挂载失败**不会报错**，需主动验证。检查挂载是否生效：
 
@@ -362,13 +363,9 @@ done
 | `200` + `content-type: text/html` | **失效**，返回的是网页，需从配置中移除 |
 | 超时无响应 | 不可达 |
 
-配置位置为 `/etc/docker/daemon.json` 的 `registry-mirrors` 字段，修改后需
-`sudo systemctl restart docker`。
+配置位置为 `/etc/docker/daemon.json` 的 `registry-mirrors` 字段，修改后需 `sudo systemctl restart docker`。
 
-需注意：Docker 按顺序尝试各加速器，**若首位失效，构建仍会失败**
-（`docker pull` 会自动 fallback，但 `docker build` 的元数据解析不一定），
-因此应移除失效项而非仅追加。若使用 1Panel 等面板管理 Docker，
-其配置可能被面板覆盖，建议在面板界面中修改。
+需注意：Docker 按顺序尝试各加速器，**若首位失效，构建仍会失败**（`docker pull` 会自动 fallback，但 `docker build` 的元数据解析不一定），因此应移除失效项而非仅追加。若使用 1Panel 等面板管理 Docker，其配置可能被面板覆盖，建议在面板界面中修改。
 
 **问题二：构建阶段拉取 Go 依赖超时**
 
@@ -430,8 +427,7 @@ sudo chmod -R 777 /opt/endfield-sync/data
 sudo docker run ... --user 0 ... rolingg/endfield-gacha-core:latest
 ```
 
-部分 NAS 的 Docker 界面提供 PUID / PGID 配置项，填入对应用户的 uid / gid，
-效果等同于 `--user`。
+部分 NAS 的 Docker 界面提供 PUID / PGID 配置项，填入对应用户的 uid / gid，效果等同于 `--user`。
 
 **诊断当前状态**：
 
@@ -443,27 +439,79 @@ sudo docker inspect endfield-sync --format '{{.Config.User}}'   # 容器运行�
 
 ## 附录 B：不使用 Docker 的部署方式
 
-适用于具备 systemd 且希望直接运行二进制的主机。
+适用于希望直接运行二进制的主机，无需安装 Docker。
 
 ### 编译
 
-在本地交叉编译，产物为静态二进制，目标主机无需 Go 环境：
+**方式一：在服务器上直接编译**（需要 Go 1.24 及以上）
+
+```bash
+cd <项目目录>
+go build -o endfield-sync ./cmd/server
+```
+
+**方式二：本地交叉编译后上传**（目标主机无需 Go 环境）
 
 ```bash
 # 输出名不要用 server —— 与 server/ 源码目录同名会冲突
 CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o endfield-sync ./cmd/server
 ```
 
-ARM 主机改用 `GOARCH=arm64`。可用 `uname -m` 确认架构：
-`x86_64` 对应 `amd64`，`aarch64` 对应 `arm64`。
+ARM 主机改用 `GOARCH=arm64`。可用 `uname -m` 确认架构：`x86_64` 对应 `amd64`，`aarch64` 对应 `arm64`。
+
+上传到服务器上的项目目录：
 
 ```bash
-scp endfield-sync config.yaml <user>@<server>:/opt/endfield-sync/
+scp endfield-sync config.yaml <user>@<server>:<项目目录>/
 ```
 
-> systemd 的工作目录与当前 shell 不同，`data_dir` 必须使用绝对路径。
+### 后台运行
 
-### 注册为 systemd 服务
+用 `nohup` 让程序在后台持续运行，退出 SSH 也不会中断。**在项目目录内执行**：
+
+```bash
+cd <项目目录>
+
+nohup ./endfield-sync -config ./config.yaml > endfield.log 2>&1 &
+```
+
+命令说明：
+
+| 部分 | 作用 |
+|------|------|
+| `nohup` | 忽略挂断信号，关闭 SSH 后进程继续运行 |
+| `> endfield.log 2>&1` | 将标准输出与错误一并写入日志文件 |
+| `&` | 放入后台执行 |
+
+程序自身也会写一份日志到 `data/logs/endfield_gacha.log`（自动切割），上面的 `endfield.log` 只是兜住控制台输出，两者内容一致。
+
+> **必须在项目目录内启动**。配置中的 `data_dir` 若为相对路径（如 `./data`），数据会落在**启动时的工作目录**下。从其他目录启动会导致数据落到意料之外的位置，或直接改成绝对路径来规避。
+
+验证运行状态：
+
+```bash
+# 查看进程
+ps aux | grep endfield-sync | grep -v grep
+
+# 跟踪日志
+tail -f endfield.log
+```
+
+日志中出现 `同步完成` 即运行正常。
+
+停止服务：
+
+```bash
+pkill -f endfield-sync
+```
+
+> **注意**：`nohup` 方式在服务器重启后不会自动拉起，进程异常退出也不会自动重启。若需要这两项保障，改用下面的 systemd 方式。
+
+### 注册为 systemd 服务（可选）
+
+相比 `nohup`，systemd 额外提供开机自启与崩溃自动重启，适合长期运行。以下 `<项目目录>` 请替换为实际路径（必须是绝对路径）。
+
+> systemd 的工作目录与当前 shell 不同，`data_dir` 必须使用绝对路径。
 
 ```bash
 sudo tee /etc/systemd/system/endfield-sync.service > /dev/null <<'EOF'
@@ -474,8 +522,8 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-WorkingDirectory=/opt/endfield-sync
-ExecStart=/opt/endfield-sync/endfield-sync -config /opt/endfield-sync/config.yaml
+WorkingDirectory=<项目目录>
+ExecStart=<项目目录>/endfield-sync -config <项目目录>/config.yaml
 Restart=on-failure
 RestartSec=10
 

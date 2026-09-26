@@ -1,7 +1,6 @@
 # endfield-gacha-core
 
-《明日方舟：终末地》抽卡记录同步服务。将抽卡数据的抓取、合并、落盘能力封装为常驻服务，
-可部署于 NAS、VPS 或任意 Linux 主机，按固定间隔自动同步，无需保持桌面客户端在线。
+《明日方舟：终末地》抽卡记录同步服务。将抽卡数据的抓取、合并、落盘能力封装为常驻服务，可部署于 NAS、VPS 或任意 Linux 主机，按固定间隔自动同步，无需保持桌面客户端在线。
 
 ## 特性
 
@@ -38,7 +37,7 @@ docker logs -f endfield-sync
 > `--user "$(id -u):$(id -g)"` 使容器以当前用户身份运行。Docker 挂载宿主目录时，
 > 可写性取决于宿主目录属主而非镜像内权限设置，指定该参数可避免额外的属主调整。
 
-完整部署流程（NAS 图形界面、systemd、故障排查）见 [linux-deploy-guide.md](linux-deploy-guide.md)。
+完整部署流程（不使用 Docker 的二进制部署、故障排查、HTTP 接口配置）见 [linux-deploy-guide.md](linux-deploy-guide.md)。
 
 ## 获取短 token
 
@@ -85,8 +84,8 @@ docker logs -f endfield-sync
 ```bash
 KEY="<access_key>"
 curl -X POST -H "Authorization: Bearer $KEY" http://127.0.0.1:8080/api/sync
-curl      -H "Authorization: Bearer $KEY" http://127.0.0.1:8080/api/sync/status
-curl                                         http://127.0.0.1:8080/healthz
+curl -H "Authorization: Bearer $KEY" http://127.0.0.1:8080/api/sync/status
+curl http://127.0.0.1:8080/healthz
 ```
 
 | 端点 | 方法 | 说明 |
