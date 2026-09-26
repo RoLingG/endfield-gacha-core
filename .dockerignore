@@ -21,10 +21,9 @@ docs/
 .vscode/
 
 # 编译产物与日志
-/server
-/bin/
 *.exe
 *.log
+/bin/
 
 # 其他
 .DS_Store
