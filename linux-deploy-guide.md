@@ -88,19 +88,13 @@ sudo docker run -d \
 
 ### 关于 `--user`
 
-Docker 挂载宿主目录时，容器内进程能否写入取决于**宿主机目录的属主**，
-镜像内对该路径的权限设置会被挂载覆盖。若目录属主与容器内进程的 uid 不一致，
-将因权限不足导致启动失败。
+Docker 挂载宿主目录时，容器内进程能否写入取决于**宿主机目录的属主**，镜像内对该路径的权限设置会被挂载覆盖。若目录属主与容器内进程的 uid 不一致，将因权限不足导致启动失败。
 
-`$(id -u):$(id -g)` 取当前 shell 用户的 uid 与 gid，使容器进程与宿主机目录属主一致，
-从而无需 `chown`，也不依赖任何固定数值。
+`$(id -u):$(id -g)` 取当前 shell 用户的 uid 与 gid，使容器进程与宿主机目录属主一致，从而无需 `chown`，也不依赖任何固定数值。
 
-命令中 `sudo docker` 的 `$(id -u)` 由 shell 在调用 `sudo` 之前展开，取到的是
-**当前用户**的 uid 而非 root，符合预期。若当前用户已在 `docker` 组内，
-可省略 `sudo`。
+命令中 `sudo docker` 的 `$(id -u)` 由 shell 在调用 `sudo` 之前展开，取到的是**当前用户**的 uid 而非 root，符合预期。若当前用户已在 `docker` 组内，可省略 `sudo`。
 
-若 `--user` 不适用（例如部分 NAS 的图形界面不提供该选项），参考
-[附录 A：权限问题](#附录-a权限问题)。
+若 `--user` 不适用（例如部分 NAS 的图形界面不提供该选项），参考 [附录 A：权限问题](#附录-a权限问题)。
 
 ## 四、验证运行
 
@@ -127,13 +121,101 @@ ls -R /opt/endfield-sync/data
 
 ## 五、日常操作
 
+### 查看运行状态
+
 ```bash
-# 修改配置后重启
+# 正在运行的容器
+sudo docker ps
+
+# 包含已停止的
+sudo docker ps -a
+
+# 只看本服务
+sudo docker ps -a --filter name=endfield-sync
+
+# 关键字段一览
+sudo docker ps -a --format "table {{.Names}}\t{{.Status}}\t{{.Image}}\t{{.Ports}}"
+```
+
+`STATUS` 列的含义：
+
+| 显示 | 含义 |
+|------|------|
+| `Up 5 minutes` | 正常运行 |
+| `Exited (0) ...` | 已退出，查看日志确认原因 |
+| `Restarting (1) ...` | 反复重启，通常为配置或权限错误 |
+| `Created` | 已创建但未启动，执行 `sudo docker start endfield-sync` |
+
+查看日志：
+
+```bash
+sudo docker logs -f endfield-sync              # 实时跟踪
+sudo docker logs --tail 100 endfield-sync      # 最近 100 行
+sudo docker logs --since 30m endfield-sync     # 最近 30 分钟
+```
+
+### 修改配置后生效
+
+`config.yaml` 是挂载进容器的，程序**只在启动时读取一次**，修改后必须重启容器：
+
+```bash
 sudo docker restart endfield-sync
+```
 
-# 查看日志
-sudo docker logs --tail 100 endfield-sync
+验证配置已生效（确认日志中的间隔与预期一致）：
 
+```bash
+sudo docker logs --tail 20 endfield-sync | grep 同步调度
+# 同步调度已启动    {"间隔": "6h0m0s", "下次执行": "2026-09-27 05:35:02"}
+```
+
+### 重启与重建的区别
+
+| 操作 | 命令 | 适用场景 |
+|------|------|---------|
+| **重启** | `sudo docker restart endfield-sync` | 只改了配置文件内容（如 token、同步间隔） |
+| **重建** | `sudo docker rm -f endfield-sync` 后重新 `docker run` | 改了挂载路径、环境变量、端口映射，或更新了镜像 |
+
+`restart` 只重启进程，**不会改变容器的启动参数**（挂载、`-e`、`-p`）。启动参数有变动时必须重建容器。
+
+重建不会丢数据——数据在宿主机 `data/` 目录中。
+
+### 更新镜像
+
+```bash
+sudo docker pull rolingg/endfield-gacha-core:latest
+sudo docker rm -f endfield-sync
+sudo docker run -d --name endfield-sync --restart unless-stopped \
+  --user "$(id -u):$(id -g)" \
+  -v /opt/endfield-sync/config.yaml:/app/config.yaml:ro \
+  -v /opt/endfield-sync/data:/app/data \
+  -e TZ=Asia/Shanghai \
+  rolingg/endfield-gacha-core:latest
+```
+
+### 调整同步间隔
+
+修改 `config.yaml` 中的 `sync_interval` 后重启容器：
+
+```yaml
+sync_interval: "360h"     # 15 天
+```
+
+| 单位 | 说明 |
+|------|------|
+| `m` | 分钟 |
+| `h` | 小时 |
+| `d` | **不支持**，`time.ParseDuration` 无此单位，会导致启动失败 |
+
+因此「15 天」应写 `360h`（15 × 24）。
+
+程序允许的最短间隔为 1 分钟，小于该值会被拒绝启动。
+
+> **不建议设置过长的间隔**。官方 `char/meta` 接口仅覆盖近 90 天记录；间隔过长还会推迟 token 失效的发现时间。默认的 `6h` 采用增量同步，无新记录时几乎不产生请求，无需为此调大。
+
+### 停止 / 备份 / 卸载
+
+```bash
 # 停止 / 启动
 sudo docker stop endfield-sync
 sudo docker start endfield-sync
@@ -227,6 +309,104 @@ sudo docker logs --tail 50 endfield-sync
 ### 日志时间戳时区不正确
 
 确认启动参数包含 `-e TZ=Asia/Shanghai`。
+
+### 挂载的配置文件未被读取
+
+现象：日志提示 `未找到配置文件 config.yaml，将仅使用环境变量启动`，
+但 `docker run` 中已通过 `-v` 指定了配置文件。
+
+挂载失败**不会报错**，需主动验证。检查挂载是否生效：
+
+```bash
+sudo docker run --rm --entrypoint sh \
+  -v /opt/endfield-sync/config.yaml:/app/config.yaml:ro \
+  rolingg/endfield-gacha-core:latest -c "ls -la /app/config.yaml"
+```
+
+- 能列出文件 → 挂载正常
+- 报 `No such file or directory` → 挂载参数有误
+
+常见原因：
+
+| 原因 | 处理 |
+|------|------|
+| 使用了相对路径 | `-v` 的宿主侧路径改为**绝对路径** |
+| 文件不存在 | 先在宿主机上创建 `config.yaml` |
+| 路径拼写错误 | 用 `ls` 确认宿主机路径正确 |
+
+### 自行构建镜像时失败
+
+若从源码构建（`docker build`），国内网络环境下可能遇到以下问题。
+
+**问题一：基础镜像元数据无法解析**
+
+```
+failed to resolve source metadata for docker.io/library/alpine:latest:
+encountered unknown type text/html; children may not be fetched
+```
+
+原因：镜像加速器返回了 HTML 页面而非镜像数据。逐一探测各加速器：
+
+```bash
+for m in <加速器地址1> <加速器地址2>; do
+  echo "--- $m ---"
+  curl -sI -m 10 "https://$m/v2/" | grep -iE "^HTTP|^content-type"
+done
+```
+
+判断标准：
+
+| 返回 | 含义 |
+|------|------|
+| `401` + `content-type: application/json` | 可用 |
+| `200` + `content-type: text/html` | **失效**，返回的是网页，需从配置中移除 |
+| 超时无响应 | 不可达 |
+
+配置位置为 `/etc/docker/daemon.json` 的 `registry-mirrors` 字段，修改后需
+`sudo systemctl restart docker`。
+
+需注意：Docker 按顺序尝试各加速器，**若首位失效，构建仍会失败**
+（`docker pull` 会自动 fallback，但 `docker build` 的元数据解析不一定），
+因此应移除失效项而非仅追加。若使用 1Panel 等面板管理 Docker，
+其配置可能被面板覆盖，建议在面板界面中修改。
+
+**问题二：构建阶段拉取 Go 依赖超时**
+
+```
+go.uber.org/multierr@v1.11.0: Get "https://proxy.golang.org/...": i/o timeout
+```
+
+Dockerfile 已默认使用国内代理（`goproxy.cn`），支持通过构建参数覆盖：
+
+```bash
+sudo docker build --build-arg GOPROXY=https://proxy.golang.org,direct -t ... .
+```
+
+同理，运行阶段的 Alpine 包源已替换为清华镜像，可用
+`--build-arg APK_MIRROR=<地址>` 覆盖。
+
+### 无法登录或推送 Docker Hub
+
+现象：
+
+```
+Error logging in to endpoint ...
+net/http: request canceled while waiting for connection
+```
+
+原因：`docker login` 与 `docker push` 访问的是 `registry-1.docker.io`，
+**镜像加速器只代理拉取，不参与认证与推送**，国内网络往往无法直连。
+
+可选方案：
+
+1. **配置 HTTP 代理**：为 Docker daemon 设置 `HTTP_PROXY` / `HTTPS_PROXY`
+2. **本地推送**：在可访问 Docker Hub 的机器上 `docker load` 后推送
+   （服务器 `docker save` 导出，传输到本地后 `docker load`）
+3. **使用 CI 构建**：在 GitHub Actions 等海外环境中自动构建并推送
+
+> 通过 GitHub 账号注册的 Docker Hub 用户没有独立密码，
+> `docker login` 的密码栏需填写 **Access Token**
+> （Docker Hub → Account Settings → Security → New Access Token）。
 
 ## 附录 A：权限问题
 
