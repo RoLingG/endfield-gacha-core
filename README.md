@@ -37,7 +37,7 @@ docker logs -f endfield-sync
 > `--user "$(id -u):$(id -g)"` 使容器以当前用户身份运行。Docker 挂载宿主目录时，
 > 可写性取决于宿主目录属主而非镜像内权限设置，指定该参数可避免额外的属主调整。
 
-完整部署流程（不使用 Docker 的二进制部署、故障排查、HTTP 接口配置）见 [linux-deploy-guide.md](linux-deploy-guide.md)。
+镜像发布于 [Docker Hub](https://hub.docker.com/r/rolingg/endfield-gacha-core)，`docker run` 时会自动拉取，无需自行构建。完整部署流程（不使用 Docker 的二进制部署、故障排查、HTTP 接口配置）见 [linux-deploy-guide.md](linux-deploy-guide.md)。
 
 ## 获取短 token
 

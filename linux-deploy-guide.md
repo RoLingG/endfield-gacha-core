@@ -64,6 +64,8 @@ mkdir -p data
 
 ## 三、启动服务
 
+镜像已发布至 Docker Hub，**无需自行构建**，`docker run` 时会自动拉取：
+
 ```bash
 cd /opt/endfield-sync
 
@@ -76,6 +78,9 @@ sudo docker run -d \
   -e TZ=Asia/Shanghai \
   rolingg/endfield-gacha-core:latest
 ```
+
+如拉取缓慢，可先单独执行 `sudo docker pull rolingg/endfield-gacha-core:latest` 观察进度。
+镜像仓库地址为 https://hub.docker.com/r/rolingg/endfield-gacha-core 。
 
 参数说明：
 
@@ -337,7 +342,8 @@ sudo docker run --rm --entrypoint sh \
 
 ### 自行构建镜像时失败
 
-若从源码构建（`docker build`），国内网络环境下可能遇到以下问题。
+镜像已发布至 Docker Hub，**正常部署无需构建**，直接 `docker pull` 即可。
+仅在需要修改源码后自行构建（`docker build`）时，才可能遇到以下问题。
 
 **问题一：基础镜像元数据无法解析**
 
