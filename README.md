@@ -14,39 +14,47 @@
 
 ## 快速开始
 
-```bash
-# 1. 准备配置：复制示例文件，填写 short_token
-cp config.example.yaml config.yaml
-$EDITOR config.yaml
+只需要 Docker 和一个短 token，镜像会自动从 Docker Hub 拉取（约 25MB），无需自行构建。
 
-# 2. 创建数据目录
-mkdir -p data
+```bash
+# 1. 准备目录
+mkdir -p endfield-sync && cd endfield-sync
+
+# 2. 写配置文件：把 short_token 换成你自己的
+cat > config.yaml <<'EOF'
+short_token: "<在此填入你的短 token>"
+server_id: "1"
+sync_interval: "6h"
+data_dir: "/app/data"
+EOF
 
 # 3. 启动
-docker run -d --name endfield-sync --restart unless-stopped \
+sudo docker run -d --name endfield-sync --restart unless-stopped \
   --user "$(id -u):$(id -g)" \
   -v "$(pwd)/config.yaml:/app/config.yaml:ro" \
   -v "$(pwd)/data:/app/data" \
   -e TZ=Asia/Shanghai \
+  -p 127.0.0.1:8080:8080
   rolingg/endfield-gacha-core:latest
 
 # 4. 查看日志，出现「同步完成」即表示成功
-docker logs -f endfield-sync
+sudo docker logs -f endfield-sync
 ```
 
-> `--user "$(id -u):$(id -g)"` 使容器以当前用户身份运行。Docker 挂载宿主目录时，
-> 可写性取决于宿主目录属主而非镜像内权限设置，指定该参数可避免额外的属主调整。
+上面只列了必要配置项，请注意 `-p` 后面的地址和端口和 `config.yaml` 文件同步，全部配置项见仓库中的 [config.example.yaml](config.example.yaml)。镜像地址为 [rolingg/endfield-gacha-core](https://hub.docker.com/r/rolingg/endfield-gacha-core)。
 
-镜像发布于 [Docker Hub](https://hub.docker.com/r/rolingg/endfield-gacha-core)，`docker run` 时会自动拉取，无需自行构建。完整部署流程（不使用 Docker 的二进制部署、故障排查、HTTP 接口配置）见 [linux-deploy-guide.md](linux-deploy-guide.md)。
+> `--user "$(id -u):$(id -g)"` 使容器以当前用户身份运行。Docker 挂载宿主目录时，可写性取决于宿主目录属主而非镜像内权限设置，指定该参数可避免额外的属主调整。
+
+完整部署流程（分步说明、不使用 Docker 的二进制部署、故障排查、HTTP 接口配置）见 [linux-deploy-guide.md](linux-deploy-guide.md)。
 
 ## 获取短 token
 
 短 token 是访问账号抽卡记录的凭证，有效期约 1~3 个月，过期后需重新获取。
 
-1. 浏览器登录《明日方舟：终末地》官网，按 `F12` 打开开发者工具
-2. 切换至 **Application**（应用）标签页
-3. 左侧选择 **Local Storage** → `ef-webview.hypergryph.com`
-4. 找到名称包含 `token` 的条目，复制其值
+1. 浏览器登录《明日方舟：终末地》[官网](https://endfield.hypergryph.com/)，按 `F12` 打开开发者工具
+2. 切换至 **Network**（网络）标签页
+3. 在未登录状态下，点击官网首页左下角的**用户**，网页跳出登录界面后，正常登录
+4. 找到 **Network**（网络）标签页中**名称**一栏内的 **hg** 接口的**载荷** 或 **check** 接口的**响应**，里面有**短 Token**
 
 > 需使用**短 token**，而非 `u8_token`。后者有效期较短，由服务端按需换取。
 
@@ -72,8 +80,7 @@ docker logs -f endfield-sync
 
 **环境变量覆盖**：环境变量优先级高于配置文件，适用于不便落盘凭证的场景。
 
-`SHORT_TOKEN` / `UID` / `SERVER_ID` / `DATA_DIR` / `SYNC_INTERVAL` /
-`HTTP_ADDR` / `ACCESS_KEY` / `MIN_TRIGGER`
+`SHORT_TOKEN` / `UID` / `SERVER_ID` / `DATA_DIR` / `SYNC_INTERVAL` / `HTTP_ADDR` / `ACCESS_KEY` / `MIN_TRIGGER`
 
 **配置查找顺序**：`-config` 参数 → `CONFIG_PATH` 环境变量 → 程序同级目录 `config.yaml`。
 
@@ -103,8 +110,7 @@ curl http://127.0.0.1:8080/healthz
 | `503` | 健康检查专用：短 token 已失效，需人工处理 |
 
 > `access_key` 是接口的唯一凭证，建议使用 `openssl rand -hex 24` 生成。
-> 建议仅监听内网地址；确需外网访问时，通过 SSH 隧道或反向代理加装 TLS 与认证，
-> 不要将端口直接暴露至公网。
+> 建议仅监听内网地址；确需外网访问时，通过 SSH 隧道或反向代理加装 TLS 与认证，不要将端口直接暴露至公网。
 
 ## 数据目录
 

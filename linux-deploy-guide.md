@@ -26,9 +26,10 @@
 mkdir -p /opt/endfield-sync && cd /opt/endfield-sync
 ```
 
-创建 `config.yaml`：
+创建 `config.yaml`。下面的内容可以直接整段复制，只需把 `short_token` 替换成你自己的：
 
-```yaml
+```bash
+cat > config.yaml <<'EOF'
 # ===== 凭证 =====
 short_token: "<在此填入短 token>"      # 必填
 server_id: "1"                        # 官方服通常为 1
@@ -44,9 +45,10 @@ log_level: "info"                     # debug / info / warn / error
 # ===== HTTP 接口（可选，留空则不启用）=====
 http_addr: ""                         # 例如 "0.0.0.0:8080"
 access_key: ""                        # 启用 http_addr 时必填
+EOF
 ```
 
-完整配置项见 [config.example.yaml](config.example.yaml)。
+使用镜像部署时只需要以上内容，`uid`、`server_type` 等会自动判定。仓库中的 [config.example.yaml](config.example.yaml) 列出了全部配置项及说明。
 
 配置文件含明文凭证，需限制访问权限：
 
@@ -64,7 +66,29 @@ mkdir -p data
 
 ## 三、启动服务
 
-镜像已发布至 Docker Hub，**无需自行构建**，`docker run` 时会自动拉取：
+镜像已发布至 [Docker Hub](https://hub.docker.com/r/rolingg/endfield-gacha-core)，**无需自行构建**。
+
+### 关于镜像拉取（可选）
+
+`docker run` 在本地没有该镜像时会**自动拉取**，因此下一步直接执行即可。首次拉取约 25MB，若想观察进度或单独验证，可先手动拉取：
+
+```bash
+sudo docker pull rolingg/endfield-gacha-core:latest
+```
+
+确认镜像已就位：
+
+```bash
+sudo docker images rolingg/endfield-gacha-core
+# REPOSITORY                      TAG       IMAGE ID       SIZE
+# rolingg/endfield-gacha-core     latest    ...            24.3MB
+```
+
+若拉取缓慢或失败，是镜像加速器的问题，见[故障排查](#拉取镜像失败)。
+
+> **注意**：`docker run` 只在本地**没有**该镜像时才拉取。若本地已有旧版本，再次执行同样的命令不会自动更新，需先 `docker pull` 或使用 `docker run --pull always`（见[更新镜像](#更新镜像)）。
+
+### 启动容器
 
 ```bash
 cd /opt/endfield-sync
@@ -79,8 +103,7 @@ sudo docker run -d \
   rolingg/endfield-gacha-core:latest
 ```
 
-如拉取缓慢，可先单独执行 `sudo docker pull rolingg/endfield-gacha-core:latest` 观察进度。
-镜像仓库地址为 https://hub.docker.com/r/rolingg/endfield-gacha-core 。
+该命令在后台启动容器并输出容器 ID。若镜像已在本地，不会重复拉取。
 
 参数说明：
 
@@ -91,6 +114,8 @@ sudo docker run -d \
 | `-v .../config.yaml:/app/config.yaml:ro` | 挂载配置文件，`:ro` 表示容器内只读 |
 | `-v .../data:/app/data` | 挂载数据目录，容器重建后数据保留 |
 | `-e TZ=Asia/Shanghai` | 设定时区，使日志时间戳为本地时间 |
+
+> 另外如果有 `http` 功能需求的话，还可以加上 `-p` 参数去二次控制地址和端口，具体详情后文会讲。
 
 ### 关于 `--user`
 
@@ -188,6 +213,8 @@ sudo docker logs --tail 20 endfield-sync | grep 同步调度
 
 ### 更新镜像
 
+`docker run` 不会自动更新本地已有的镜像，需先显式拉取，再重建容器：
+
 ```bash
 sudo docker pull rolingg/endfield-gacha-core:latest
 sudo docker rm -f endfield-sync
@@ -198,6 +225,8 @@ sudo docker run -d --name endfield-sync --restart unless-stopped \
   -e TZ=Asia/Shanghai \
   rolingg/endfield-gacha-core:latest
 ```
+
+数据不受影响，仍在宿主机 `/opt/endfield-sync/data` 中。
 
 ### 调整同步间隔
 
@@ -282,6 +311,38 @@ ssh -N -L 8080:127.0.0.1:8080 <user>@<server>
 
 ## 七、故障排查
 
+### 拉取镜像失败
+
+现象：
+
+```
+Error response from daemon: ... failed to resolve ...
+encountered unknown type text/html; children may not be fetched
+```
+
+或长时间卡住无进度。原因是镜像加速器不可用（与镜像本身无关）。
+
+加速器只影响拉取，不影响已拉取到本地的镜像。逐一探测各加速器是否可用：
+
+```bash
+for m in <加速器地址1> <加速器地址2>; do
+  echo "--- $m ---"
+  curl -sI -m 10 "https://$m/v2/" | grep -iE "^HTTP|^content-type"
+done
+```
+
+判断标准：
+
+| 返回 | 含义 |
+|------|------|
+| `401` + `content-type: application/json` | 可用 |
+| `200` + `content-type: text/html` | **失效**，返回的是网页，需从配置中移除 |
+| 超时无响应 | 不可达 |
+
+配置位置为 `/etc/docker/daemon.json` 的 `registry-mirrors` 字段，修改后需 `sudo systemctl restart docker`。
+
+> **注意**：Docker 按顺序尝试各加速器，**若首位失效，拉取仍可能失败**。应移除失效项而非仅追加。若使用 1Panel 等面板管理 Docker，其配置可能被面板覆盖，建议在面板界面中修改。
+
 ### 容器无法启动
 
 ```bash
@@ -342,8 +403,7 @@ sudo docker run --rm --entrypoint sh \
 
 ### 自行构建镜像时失败
 
-镜像已发布至 Docker Hub，**正常部署无需构建**，直接 `docker pull` 即可。
-仅在需要修改源码后自行构建（`docker build`）时，才可能遇到以下问题。
+镜像已发布至 Docker Hub，**正常部署无需构建**，直接 `docker pull` 即可。仅在需要修改源码后自行构建（`docker build`）时，才可能遇到以下问题。
 
 **问题一：基础镜像元数据无法解析**
 
@@ -352,26 +412,7 @@ failed to resolve source metadata for docker.io/library/alpine:latest:
 encountered unknown type text/html; children may not be fetched
 ```
 
-原因：镜像加速器返回了 HTML 页面而非镜像数据。逐一探测各加速器：
-
-```bash
-for m in <加速器地址1> <加速器地址2>; do
-  echo "--- $m ---"
-  curl -sI -m 10 "https://$m/v2/" | grep -iE "^HTTP|^content-type"
-done
-```
-
-判断标准：
-
-| 返回 | 含义 |
-|------|------|
-| `401` + `content-type: application/json` | 可用 |
-| `200` + `content-type: text/html` | **失效**，返回的是网页，需从配置中移除 |
-| 超时无响应 | 不可达 |
-
-配置位置为 `/etc/docker/daemon.json` 的 `registry-mirrors` 字段，修改后需 `sudo systemctl restart docker`。
-
-需注意：Docker 按顺序尝试各加速器，**若首位失效，构建仍会失败**（`docker pull` 会自动 fallback，但 `docker build` 的元数据解析不一定），因此应移除失效项而非仅追加。若使用 1Panel 等面板管理 Docker，其配置可能被面板覆盖，建议在面板界面中修改。
+原因同样是镜像加速器失效，排查方法见[拉取镜像失败](#拉取镜像失败)。需注意 `docker build` 与 `docker pull` 的行为差异：`docker pull` 在某个加速器失败时会自动尝试下一个，而 `docker build` 解析元数据时不一定，因此**失效项必须从配置中移除**，仅追加可用项无法解决。
 
 **问题二：构建阶段拉取 Go 依赖超时**
 
