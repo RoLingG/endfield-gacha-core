@@ -1,5 +1,5 @@
 # ===== 构建阶段 =====
-FROM golang:1.24-alpine AS builder
+FROM golang:1.27.3-alpine AS builder
 
 # 国内网络下 proxy.golang.org 不可达，改用国内代理。
 # 通过构建参数传入，海外构建时可覆盖：--build-arg GOPROXY=https://proxy.golang.org,direct
