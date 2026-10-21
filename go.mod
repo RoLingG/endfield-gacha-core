@@ -1,6 +1,6 @@
 module endfield-gacha-core
 
-go 1.24
+go 1.27.3
 
 require (
 	go.uber.org/zap v1.27.1
